@@ -1,0 +1,162 @@
+# ============================================================================
+# JUPYTER NOTEBOOK
+# ============================================================================
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+*.ipynb
+!*.ipynb  # If you DO want to commit notebooks, remove this line
+
+# Jupyter Notebook checkpoints
+.jupyter/
+
+# ============================================================================
+# PYTHON & VIRTUALENV
+# ============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv
+
+# ============================================================================
+# IDE & EDITOR
+# ============================================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.AppleDouble
+.LSOverride
+*.sublime-project
+*.sublime-workspace
+.project
+.pydevproject
+.settings/
+*.code-workspace
+
+# ============================================================================
+# DATA FILES (CRITICAL!)
+# ============================================================================
+# Raw data
+data/
+*.csv
+*.xlsx
+*.xls
+*.json
+
+# Kaggle cache (downloaded datasets)
+.cache/
+~/.kaggle/
+.kaggle/
+
+# ⚠️ NEVER COMMIT KAGGLE CREDENTIALS
+kaggle.json
+
+# ============================================================================
+# LARGE OUTPUT FILES
+# ============================================================================
+results/
+*.png
+*.jpg
+*.jpeg
+*.pdf
+*.html
+outputs/
+
+# Model files
+*.pkl
+*.pickle
+*.h5
+*.joblib
+*.model
+
+# ============================================================================
+# ENVIRONMENT & CONFIG
+# ============================================================================
+.env
+.env.local
+.env.*.local
+config.local.py
+secrets.py
+
+# ============================================================================
+# OS FILES
+# ============================================================================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============================================================================
+# TEMPORARY FILES
+# ============================================================================
+*.tmp
+*.temp
+*.log
+*.bak
+*.backup
+*~
+
+# ============================================================================
+# PROJECT SPECIFIC
+# ============================================================================
+# MOSS reports (if you generate them locally)
+moss_report/
+similarity_report/
+
+# Temporary experiment files
+experiments/
+scratch/
+test_*.py
+
+# ============================================================================
+# IDE SPECIFIC
+# ============================================================================
+# PyCharm
+.idea/
+*.iml
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Spyder
+.spyderproject
+.spyproject
+
+# Rope
+.ropeproject
+
+# ============================================================================
+# OPTIONAL: Keep these if you want to commit them
+# ============================================================================
+# .gitkeep  # Uncomment to track empty directories
+# src/      # Keep your source code
+# requirements.txt  # Keep dependency list
