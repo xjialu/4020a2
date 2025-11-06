@@ -65,8 +65,8 @@ venv.bak/
 # DATA FILES (CRITICAL!)
 # ============================================================================
 # Raw data
-data/
-*.csv
+# data/
+# *.csv
 *.xlsx
 *.xls
 *.json
