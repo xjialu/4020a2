@@ -12,6 +12,7 @@ from collections import Counter, defaultdict
 from itertools import combinations
 
 import numpy as np
+import pandas as pd
 
 
 class AprioriMiner:
@@ -25,33 +26,35 @@ class AprioriMiner:
 
         Args:
             min_support (float): Minimum support threshold (0-1)
-                               Support = number of transactions containing itemset / total transactions
         """
         self.min_support = min_support
         self.transactions = []
-        self.frequent_itemsets = {}  # {k: [(itemset, support), ...]}
+        self.frequent_itemsets = {}  # {k: [(itemset, count), ...]}
         self.association_rules = []
         self.all_frequent_itemsets = []
+        self.n_transactions = 0
 
     def fit(self, transactions):
         """
         Fit the Apriori algorithm on transaction data.
 
         Args:
-            transactions (list): List of transactions, where each transaction is a frozenset of items
+            transactions (list): List of frozensets (transactions)
         """
         self.transactions = transactions
+        self.n_transactions = len(transactions)
         self.frequent_itemsets = {}
         self.association_rules = []
         self.all_frequent_itemsets = []
 
         # Calculate minimum support count (absolute number)
-        min_support_count = int(np.ceil(self.min_support * len(transactions)))
+        min_support_count = int(np.ceil(self.min_support * self.n_transactions))
 
         print(
-            f"Fitting Apriori with min_support={self.min_support} (count={min_support_count})"
+            f"Fitting Apriori with min_support={self.min_support} "
+            f"(count={min_support_count})"
         )
-        print(f"Total transactions: {len(transactions)}")
+        print(f"Total transactions: {self.n_transactions}")
 
         # Step 1: Generate 1-itemsets
         print("Generating 1-itemsets...")
@@ -59,7 +62,7 @@ class AprioriMiner:
 
         if not one_itemsets:
             print("No frequent 1-itemsets found. Try lowering min_support.")
-            return
+            return self.all_frequent_itemsets
 
         self.frequent_itemsets[1] = one_itemsets
         current_itemsets = one_itemsets
@@ -77,7 +80,9 @@ class AprioriMiner:
                 break
 
             # Prune candidates
-            frequent_k_itemsets = self._prune_candidates(candidates, min_support_count)
+            frequent_k_itemsets = self._prune_candidates(
+                candidates, min_support_count
+            )
 
             if not frequent_k_itemsets:
                 print(f"  Found 0 frequent {k}-itemsets")
@@ -93,17 +98,10 @@ class AprioriMiner:
             self.all_frequent_itemsets.extend(self.frequent_itemsets[k])
 
         print(f"Total frequent itemsets: {len(self.all_frequent_itemsets)}")
+        return self.all_frequent_itemsets
 
     def _generate_one_itemsets(self, min_support_count):
-        """
-        Generate frequent 1-itemsets.
-
-        Args:
-            min_support_count (int): Minimum support count threshold
-
-        Returns:
-            list: List of (frozenset, support) tuples for frequent 1-itemsets
-        """
+        """Generate frequent 1-itemsets."""
         # Count occurrences of each item
         item_counts = Counter()
         for transaction in self.transactions:
@@ -118,38 +116,26 @@ class AprioriMiner:
         ]
 
         print(f"  Found {len(frequent_1_itemsets)} frequent 1-itemsets")
-
         return sorted(frequent_1_itemsets, key=lambda x: x[1], reverse=True)
 
     def _generate_candidates(self, current_itemsets, k):
         """
-        Generate candidate k-itemsets from (k-1)-itemsets using join step.
-
-        Reference: Agrawal & Srikant (1994) - F(k-1) join F(k-1)
-
-        Args:
-            current_itemsets (list): Current frequent itemsets
-            k (int): Size of itemsets to generate
-
-        Returns:
-            list: List of candidate k-itemsets as frozensets
+        Generate candidate k-itemsets using join and prune steps.
         """
-        # Extract just the itemsets (without support counts)
+        # Extract itemsets and create lookup set
         itemsets_only = [itemset for itemset, _ in current_itemsets]
-        itemsets_set = set(itemsets_only)  # For O(1) lookup
+        itemsets_set = set(itemsets_only)
 
-        # Generate candidates by combining (k-1)-itemsets
         candidates = set()
+
+        # Join step: combine (k-1)-itemsets
         for i in range(len(itemsets_only)):
             for j in range(i + 1, len(itemsets_only)):
                 union = itemsets_only[i] | itemsets_only[j]
 
                 # Only keep if union has exactly k items
-                # if len(union) == k:
-                #     candidates.add(union)
-                    
                 if len(union) == k:
-                    # All (k-1)-subsets must be frequent
+                    # Prune step: all (k-1)-subsets must be frequent
                     valid = True
                     for subset in combinations(union, k - 1):
                         if frozenset(subset) not in itemsets_set:
@@ -162,18 +148,9 @@ class AprioriMiner:
         return list(candidates)
 
     def _prune_candidates(self, candidates, min_support_count):
-        """
-        Prune candidates by support (Apriori pruning step).
-
-        Args:
-            candidates (list): List of candidate itemsets
-            min_support_count (int): Minimum support count threshold
-
-        Returns:
-            list: List of (frozenset, support) tuples for frequent itemsets
-        """
-        # Count support for each candidate
+        """Prune candidates by counting support."""
         candidate_counts = defaultdict(int)
+
         for transaction in self.transactions:
             for candidate in candidates:
                 if candidate.issubset(transaction):
@@ -188,86 +165,97 @@ class AprioriMiner:
 
         return sorted(frequent_itemsets, key=lambda x: x[1], reverse=True)
 
-    def generate_rules(self, min_confidence=0.5):
+    def generate_rules(self, min_confidence=0.5, min_lift=1.0):
         """
         Generate association rules from frequent itemsets.
 
-        For each frequent itemset X with |X| > 1:
-            For each A c X:
-                If confidence(A -> X-A) >= min_confidence:
-                    Generate rule A -> X-A
-
         Args:
-            min_confidence (float): Minimum confidence threshold (0-1)
-                                   Confidence = support(A u B) / support(A)
+            min_confidence (float): Minimum confidence threshold
+            min_lift (float): Minimum lift threshold
 
         Returns:
-            list: List of association rules
+            list: Association rules
         """
         self.association_rules = []
 
-        # Create support dictionary for faster lookup
-        support_dict = {
-            itemset: support for itemset, support in self.all_frequent_itemsets
+        # Create support dictionaries (both count and ratio)
+        support_count_dict = {
+            itemset: count for itemset, count in self.all_frequent_itemsets
+        }
+        support_ratio_dict = {
+            itemset: count / self.n_transactions
+            for itemset, count in self.all_frequent_itemsets
         }
 
-        # Generate rules from itemsets with 2 or more items
-        for itemset, support_AB in self.all_frequent_itemsets:
+        # Generate rules from itemsets with 2+ items
+        for itemset, count_AB in self.all_frequent_itemsets:
             if len(itemset) < 2:
                 continue
 
-            # Generate all possible antecedents
+            # Try all possible antecedent sizes
             for antecedent_size in range(1, len(itemset)):
                 for antecedent in combinations(sorted(itemset), antecedent_size):
                     antecedent = frozenset(antecedent)
                     consequent = itemset - antecedent
 
-                    # Look up support values
-                    if antecedent not in support_dict:
+                    # Get support counts
+                    if antecedent not in support_count_dict:
                         continue
 
-                    support_A = support_dict[antecedent]
+                    count_A = support_count_dict[antecedent]
+                    count_B = support_count_dict.get(consequent, 0)
 
-                    # Calculate confidence and lift
-                    confidence = support_AB / support_A
+                    if count_B == 0:
+                        continue
 
-                    if confidence >= min_confidence:
-                        # Calculate lift
-                        support_B = support_dict.get(consequent, 0)
-                        if support_B > 0:
-                            lift = (support_AB * len(self.transactions)) / (
-                                support_A * support_B
-                            )
-                        else:
-                            lift = 0
+                    # Calculate metrics
+                    support = count_AB / self.n_transactions
+                    confidence = count_AB / count_A
+                    lift = (count_AB * self.n_transactions) / (count_A * count_B)
 
+                    # Filter by thresholds
+                    if confidence >= min_confidence and lift >= min_lift:
                         rule = {
                             "antecedent": antecedent,
                             "consequent": consequent,
-                            "support": support_AB / len(self.transactions),
+                            "support": support,
                             "confidence": confidence,
                             "lift": lift,
                         }
                         self.association_rules.append(rule)
 
-        # Sort by confidence
-        self.association_rules.sort(key=lambda x: x["confidence"], reverse=True)
+        # Sort by confidence, then lift
+        self.association_rules.sort(
+            key=lambda x: (x["confidence"], x["lift"]), reverse=True
+        )
+
+        print(f"\nGenerated {len(self.association_rules)} association rules")
+        print(f"  Min confidence: {min_confidence}")
+        print(f"  Min lift: {min_lift}")
 
         return self.association_rules
 
-    def get_frequent_itemsets(self, k=None):
+    def get_frequent_itemsets(self, k=None, min_support=None):
         """
         Get frequent itemsets.
 
         Args:
-            k (int, optional): Get itemsets of size k. If None, get all.
+            k (int): Size of itemsets (None for all)
+            min_support (float): Override minimum support filter
 
         Returns:
-            list: List of (itemset, support_count) tuples
+            list: Frequent itemsets
         """
         if k is None:
-            return self.all_frequent_itemsets
-        return self.frequent_itemsets.get(k, [])
+            itemsets = self.all_frequent_itemsets
+        else:
+            itemsets = self.frequent_itemsets.get(k, [])
+
+        if min_support is not None:
+            min_count = int(np.ceil(min_support * self.n_transactions))
+            itemsets = [(iset, cnt) for iset, cnt in itemsets if cnt >= min_count]
+
+        return itemsets
 
     def print_summary(self):
         """Print summary of results."""
@@ -276,7 +264,7 @@ class AprioriMiner:
         print("=" * 70 + "\n")
 
         print(f"Min Support: {self.min_support}")
-        print(f"Total Transactions: {len(self.transactions)}")
+        print(f"Total Transactions: {self.n_transactions}")
         print(f"Total Frequent Itemsets: {len(self.all_frequent_itemsets)}\n")
 
         print("Itemsets by Size:")
@@ -284,18 +272,37 @@ class AprioriMiner:
             count = len(self.frequent_itemsets[k])
             print(f"  {k}-itemsets: {count}")
 
-        print(f"\nAssociation Rules: {len(self.association_rules)}\n")
-
         if self.association_rules:
-            print("Top 10 Rules by Confidence:")
+            print(f"\nAssociation Rules: {len(self.association_rules)}")
+            print("\nTop 10 Rules by Confidence:")
             for i, rule in enumerate(self.association_rules[:10], 1):
-                print(f"\n  {i}. {self._format_rule(rule)}")
-                print(f"     Confidence: {rule['confidence']:.3f}")
+                ant_str = ", ".join(sorted(rule["antecedent"]))
+                cons_str = ", ".join(sorted(rule["consequent"]))
+                print(f"\n  {i}. {{{ant_str}}} -> {{{cons_str}}}")
                 print(f"     Support: {rule['support']:.3f}")
-                print(f"     Lift: {rule['lift']:.3f}")
+                print(f"     Confidence: {rule['confidence']:.3f}")
+                print(f"     Lift: {rule['lift']:.2f}")
 
-    def _format_rule(self, rule):
-        """Format a rule as a readable string."""
-        antecedent = ", ".join(sorted(rule["antecedent"]))
-        consequent = ", ".join(sorted(rule["consequent"]))
-        return f"{{{antecedent}}} -> {{{consequent}}}"
+    def get_rules_df(self):
+        """Convert rules to DataFrame for analysis."""
+        if not self.association_rules:
+            return pd.DataFrame()
+
+        rules_data = []
+        for rule in self.association_rules:
+            ant_str = ", ".join(sorted(rule["antecedent"]))
+            cons_str = ", ".join(sorted(rule["consequent"]))
+            rule_str = f"{ant_str} → {cons_str}"
+
+            rules_data.append(
+                {
+                    "antecedent": rule["antecedent"],
+                    "consequent": rule["consequent"],
+                    "rule_str": rule_str,
+                    "support": rule["support"],
+                    "confidence": rule["confidence"],
+                    "lift": rule["lift"],
+                }
+            )
+
+        return pd.DataFrame(rules_data)
