@@ -97,9 +97,9 @@ class GSPMiner:
         Gap constraint: Between consecutive matched itemsets, there can be at most
         max_gap itemsets in the original sequence.
 
-        Note: Uses greedy first-match strategy. Assumes each item appears at most
-        once per sequence (valid for discretized cancer features where each
-        feature-bin combination is unique per patient).
+        Note: Uses greedy first-match strategy. Each feature appears at most
+        once per sequence (since features are ranked by z-score, each feature
+        appears in exactly one itemset per patient sequence).
         """
         if len(subseq) == 0:
             return True
